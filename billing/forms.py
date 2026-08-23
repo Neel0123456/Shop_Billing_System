@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from uuid import uuid4
 
 from django import forms
 from django.conf import settings
@@ -85,6 +86,9 @@ class InvoiceForm(forms.ModelForm):
         help_text=f"Leave blank for {settings.DEFAULT_CITY}.",
     )
 
+    # Carried through every render of the form; see Invoice.form_token.
+    form_token = forms.CharField(required=False, widget=forms.HiddenInput)
+
     payment_status = forms.ChoiceField(
         label="Payment",
         choices=PaymentStatus.choices,
@@ -132,6 +136,8 @@ class InvoiceForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if not self.instance.pk:
             self.fields["invoice_date"].initial = timezone.localdate()
+            # A new key per rendered form, so one form can save exactly one bill.
+            self.fields["form_token"].initial = uuid4().hex
         # `grand_total` is injected by the view from the validated formset, so
         # the payment checks below can compare against the real bill amount.
         self.computed_total: Decimal = ZERO

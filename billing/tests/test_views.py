@@ -693,3 +693,133 @@ class ArchivePathTests(TestCase):
         invoice.refresh_from_db()
         self.assertTrue(invoice.pdf_exists)
         self.assertGreater(invoice.pdf_saved_at, first_saved_at)
+
+
+@override_settings(**TEST_SETTINGS)
+class DuplicateSubmissionTests(TestCase):
+    """
+    Re-posting the same bill form must never create a second bill.
+
+    Covers the real-world ways it happens: an impatient double click, the
+    browser Back button followed by Save again, and Save then Save & Print.
+    """
+
+    def setUp(self):
+        make_shop()
+        self.user = make_user()
+        self.client.force_login(self.user)
+        self.url = reverse("billing:invoice_create")
+
+    def _form_token(self):
+        response = self.client.get(self.url)
+        return response.context["form"]["form_token"].value()
+
+    def test_the_form_carries_a_token(self):
+        token = self._form_token()
+        self.assertTrue(token)
+        self.assertEqual(len(token), 32)
+
+    def test_each_fresh_form_gets_a_different_token(self):
+        self.assertNotEqual(self._form_token(), self._form_token())
+
+    def test_posting_the_same_form_twice_creates_one_bill(self):
+        data = invoice_post_data(form_token=self._form_token())
+
+        first = self.client.post(self.url, data)
+        second = self.client.post(self.url, data)
+
+        self.assertEqual(Invoice.objects.count(), 1)
+        invoice = Invoice.objects.get()
+        self.assertRedirects(first, invoice.get_absolute_url())
+        self.assertRedirects(second, invoice.get_absolute_url())
+
+    def test_the_repeat_is_reported_rather_than_silently_ignored(self):
+        data = invoice_post_data(form_token=self._form_token())
+        self.client.post(self.url, data)
+        response = self.client.post(self.url, data, follow=True)
+        self.assertContains(response, "already saved")
+
+    def test_save_then_save_and_print_does_not_duplicate(self):
+        token = self._form_token()
+        self.client.post(self.url, invoice_post_data(form_token=token, action="save"))
+        self.client.post(self.url, invoice_post_data(form_token=token, action="save_print"))
+        self.assertEqual(Invoice.objects.count(), 1)
+
+    def test_the_totals_are_not_inflated_by_a_repeat(self):
+        data = invoice_post_data(
+            form_token=self._form_token(),
+            **{"items-0-quantity": "1", "items-0-rate": "1620"},
+        )
+        for _ in range(3):
+            self.client.post(self.url, data)
+
+        response = self.client.get(reverse("billing:invoice_list"))
+        summary = response.context["summary"]
+        self.assertEqual(summary["count"], 1)
+        self.assertEqual(summary["billed"], Decimal("1620.00"))
+
+    def test_a_repeat_does_not_print_a_second_time(self):
+        token = self._form_token()
+        data = invoice_post_data(form_token=token, action="save_print")
+        self.client.post(self.url, data)
+        self.client.post(self.url, data)
+
+        self.assertEqual(Invoice.objects.count(), 1)
+        self.assertEqual(Invoice.objects.get().print_count, 1)
+        self.assertEqual(PrintJob.objects.count(), 1)
+
+    def test_a_repeat_does_not_duplicate_the_customer(self):
+        data = invoice_post_data(form_token=self._form_token())
+        self.client.post(self.url, data)
+        self.client.post(self.url, data)
+        self.assertEqual(Customer.objects.count(), 1)
+
+    def test_two_genuinely_different_bills_are_both_saved(self):
+        self.client.post(self.url, invoice_post_data(form_token=self._form_token()))
+        self.client.post(
+            self.url,
+            invoice_post_data(form_token=self._form_token(), customer_phone="9820055667"),
+        )
+        self.assertEqual(Invoice.objects.count(), 2)
+
+    def test_the_same_customer_can_be_billed_twice_with_fresh_forms(self):
+        self.client.post(self.url, invoice_post_data(form_token=self._form_token()))
+        self.client.post(self.url, invoice_post_data(form_token=self._form_token()))
+        self.assertEqual(Invoice.objects.count(), 2)
+        self.assertEqual(Customer.objects.count(), 1)
+
+    def test_a_missing_token_still_saves(self):
+        # Older bookmarked forms or JS-less clients must not be locked out.
+        data = invoice_post_data()
+        data.pop("form_token", None)
+        self.client.post(self.url, data)
+        self.assertEqual(Invoice.objects.count(), 1)
+        self.assertIsNone(Invoice.objects.get().form_token)
+
+    def test_the_token_is_stored_on_the_bill(self):
+        token = self._form_token()
+        self.client.post(self.url, invoice_post_data(form_token=token))
+        self.assertEqual(Invoice.objects.get().form_token, token)
+
+    def test_editing_a_bill_is_unaffected(self):
+        self.client.post(self.url, invoice_post_data(form_token=self._form_token()))
+        invoice = Invoice.objects.get()
+        item = invoice.items.get()
+
+        edit_data = invoice_post_data(**{
+            "items-INITIAL_FORMS": "1",
+            "items-0-id": str(item.pk),
+            "items-0-quantity": "1",
+            "items-0-rate": "999",
+        })
+        # Editing twice must update, never duplicate.
+        for _ in range(2):
+            self.client.post(reverse("billing:invoice_update", args=[invoice.pk]), edit_data)
+
+        self.assertEqual(Invoice.objects.count(), 1)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.grand_total, Decimal("999.00"))
+
+    def test_the_form_page_is_not_cacheable(self):
+        response = self.client.get(self.url)
+        self.assertIn("no-store", response["Cache-Control"])

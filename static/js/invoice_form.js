@@ -362,6 +362,35 @@
     }
   });
 
+  /* ------------------------------------------- double submission guard */
+  /* The server refuses a repeat of the same form outright (see
+     Invoice.form_token). This only makes the refusal unnecessary: the buttons
+     lock on the first click so an impatient double click cannot fire twice. */
+  var submitted = false;
+  form.addEventListener("submit", function (event) {
+    if (submitted) {
+      event.preventDefault();
+      return;
+    }
+    submitted = true;
+
+    var clicked = event.submitter;
+    form.querySelectorAll(".js-submit").forEach(function (button) {
+      button.disabled = true;
+      if (button === clicked && button.dataset.busy) {
+        button.textContent = button.dataset.busy;
+      }
+    });
+
+    /* If the browser blocks navigation (validation, offline), let them retry. */
+    setTimeout(function () {
+      submitted = false;
+      form.querySelectorAll(".js-submit").forEach(function (button) {
+        button.disabled = false;
+      });
+    }, 12000);
+  });
+
   renumberRows();
   applyStatusUI();
   recalculate();

@@ -18,7 +18,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
@@ -223,7 +223,32 @@ class InvoiceFormMixin:
         form, formset = self._build_forms()
         return self.render_page(form, formset)
 
+    def _already_saved(self, request):
+        """
+        The bill this exact form submission already created, if any.
+
+        Guards against every flavour of double submission: a double click, the
+        browser Back button followed by Save again, or a retried request. All of
+        them carry the same form_token, so the second attempt is recognised
+        instead of producing another bill (and another amount in the totals).
+        """
+        if self.get_object_or_none():
+            return None  # editing updates one row, it cannot duplicate
+        token = (request.POST.get("form_token") or "").strip()
+        if not token:
+            return None
+        return Invoice.objects.filter(form_token=token).first()
+
     def post(self, request, *args, **kwargs):
+        duplicate = self._already_saved(request)
+        if duplicate:
+            messages.info(
+                request,
+                f"This bill was already saved as {duplicate.number}. "
+                f"Nothing was added a second time.",
+            )
+            return redirect(duplicate.get_absolute_url())
+
         form, formset = self._build_forms(request.POST)
 
         # Validate the lines first so the header knows the bill total.
@@ -236,7 +261,16 @@ class InvoiceFormMixin:
             messages.error(request, "Please correct the highlighted fields.")
             return self.render_page(form, formset)
 
-        invoice = self.save_invoice(form, formset)
+        try:
+            invoice = self.save_invoice(form, formset)
+        except IntegrityError:
+            # Two requests raced past the check above; the unique constraint on
+            # form_token stopped the second one. Show the bill that survived.
+            existing = self._already_saved(request)
+            if existing:
+                messages.info(request, f"This bill was already saved as {existing.number}.")
+                return redirect(existing.get_absolute_url())
+            raise
 
         action = request.POST.get("action", "save")
         if action == "save_print":
@@ -257,6 +291,8 @@ class InvoiceFormMixin:
         invoice.customer = customer
         if not invoice.pk:
             invoice.created_by = self.request.user
+            # Stamp the submission key so a repeat of this POST is recognised.
+            invoice.form_token = (form.cleaned_data.get("form_token") or "").strip() or None
         invoice.save()
 
         formset.instance = invoice
@@ -309,7 +345,7 @@ class InvoiceFormMixin:
         return redirect(invoice.get_absolute_url())
 
     def render_page(self, form, formset):
-        return render(
+        response = render(
             self.request,
             self.template_name,
             {
@@ -321,6 +357,12 @@ class InvoiceFormMixin:
                 "engine": documents.active_engine(),
             },
         )
+        # Never serve the bill form from the browser cache. Pressing Back after
+        # a save must fetch a fresh form with a fresh token, not re-show the
+        # filled one and invite another submission.
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        return response
 
 
 class InvoiceCreateView(LoginRequiredMixin, InvoiceFormMixin, View):

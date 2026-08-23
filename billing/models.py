@@ -253,6 +253,20 @@ class Invoice(models.Model):
 
     notes = models.TextField(blank=True)
 
+    # --- duplicate-submission guard ----------------------------------------
+    # A one-shot key embedded in the bill form. Re-posting the same form -
+    # double click, browser Back then Save again, a retried request - carries
+    # the same key, and the unique constraint plus the check in the view turn
+    # that into "you already saved this" instead of a second bill.
+    form_token = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+        help_text="Idempotency key of the form submission that created this bill.",
+    )
+
     # --- where the generated document lives on disk -------------------------
     # Full absolute path of the archived PDF, so the file can be reopened,
     # re-attached or emailed straight from the database record.

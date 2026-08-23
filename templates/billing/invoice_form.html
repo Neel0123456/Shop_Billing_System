@@ -21,6 +21,8 @@
       data-lookup-url="{% url 'billing:customer_lookup' %}"
       data-default-city="{{ default_city }}">
   {% csrf_token %}
+  {# One-shot key: re-posting this same form cannot create a second bill. #}
+  {{ form.form_token }}
 
   {% if form.non_field_errors or formset.non_form_errors %}
     <div class="alert alert-error">
@@ -246,10 +248,12 @@
     </div>
 
     <div class="sticky-actions">
-      <button type="submit" name="action" value="save" class="btn btn-outline btn-lg">
+      <button type="submit" name="action" value="save"
+              class="btn btn-outline btn-lg js-submit" data-busy="Saving...">
         Save
       </button>
-      <button type="submit" name="action" value="save_print" class="btn btn-primary btn-lg">
+      <button type="submit" name="action" value="save_print"
+              class="btn btn-primary btn-lg js-submit" data-busy="Saving and printing...">
         Save &amp; Print
       </button>
       <span class="spacer"></span>

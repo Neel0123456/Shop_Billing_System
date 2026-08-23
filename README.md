@@ -353,6 +353,12 @@ same rules are enforced again on the server — the browser is only a convenienc
 **Save** stores the bill and archives the PDF. **Save & Print** does that and
 sends it to the printer.
 
+Each bill form carries a one-shot key, so **one form can only ever save one
+bill**. A double click, pressing Back and saving again, or Save followed by
+Save & Print all land on the bill that already exists with a "this bill was
+already saved" note, instead of adding a duplicate and inflating the totals.
+To bill the same customer a second time, open a fresh **New bill** form.
+
 ---
 
 ## The listing page
