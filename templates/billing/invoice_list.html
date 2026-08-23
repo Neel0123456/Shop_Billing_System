@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% load billing_extras %}
+
+{% block title %}All bills{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>All bills</h1>
+    <p class="sub">
+      {% if is_filtered %}{{ summary.count }} matching bill(s){% else %}Every bill ever issued{% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'billing:invoice_create' %}" class="btn btn-primary">+ New bill</a>
+  </div>
+</div>
+
+{# ------------------------------------------------------------ summary --- #}
+<div class="stats">
+  <div class="stat is-info">
+    <div class="label">Bills</div>
+    <div class="value">{{ summary.count }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Total billed</div>
+    <div class="value">{{ summary.billed|money }}</div>
+  </div>
+  <div class="stat is-ok">
+    <div class="label">Received</div>
+    <div class="value">{{ summary.received|money }}</div>
+  </div>
+  <div class="stat is-danger">
+    <div class="label">Pending ({{ summary.pending_count }})</div>
+    <div class="value">{{ summary.pending|money }}</div>
+  </div>
+  {% if summary.overpaid %}
+    <div class="stat is-warn">
+      <div class="label">Overpaid</div>
+      <div class="value">{{ summary.overpaid|money }}</div>
+    </div>
+  {% endif %}
+</div>
+
+{# ------------------------------------------------------------ filters --- #}
+<div class="card">
+  <div class="card-head">
+    <h2>Filters</h2>
+    <span class="hint">Combine any of these; blank fields are ignored.</span>
+  </div>
+  <div class="card-body">
+    <form method="get">
+      <div class="filters">
+        <div class="field">
+          <label for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
+          {{ filter_form.q }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.name.id_for_label }}">{{ filter_form.name.label }}</label>
+          {{ filter_form.name }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.phone.id_for_label }}">{{ filter_form.phone.label }}</label>
+          {{ filter_form.phone }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.email.id_for_label }}">{{ filter_form.email.label }}</label>
+          {{ filter_form.email }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.city.id_for_label }}">{{ filter_form.city.label }}</label>
+          {{ filter_form.city }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.payment.id_for_label }}">{{ filter_form.payment.label }}</label>
+          {{ filter_form.payment }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.date_from.id_for_label }}">{{ filter_form.date_from.label }}</label>
+          {{ filter_form.date_from }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.date_to.id_for_label }}">{{ filter_form.date_to.label }}</label>
+          {{ filter_form.date_to }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.min_amount.id_for_label }}">{{ filter_form.min_amount.label }}</label>
+          {{ filter_form.min_amount }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.max_amount.id_for_label }}">{{ filter_form.max_amount.label }}</label>
+          {{ filter_form.max_amount }}
+        </div>
+        <div class="field">
+          <label for="{{ filter_form.created_on.id_for_label }}">{{ filter_form.created_on.label }}</label>
+          {{ filter_form.created_on }}
+          <div class="form-text">{{ filter_form.created_on.help_text }}</div>
+        </div>
+      </div>
+
+      <div class="flex mt-1">
+        <span class="small muted">Quick date:</span>
+        <a class="btn btn-outline btn-sm" href="?date_from={{ today|date:'Y-m-d' }}&amp;date_to={{ today|date:'Y-m-d' }}">Today</a>
+        <a class="btn btn-outline btn-sm" href="?date_from={{ yesterday|date:'Y-m-d' }}&amp;date_to={{ yesterday|date:'Y-m-d' }}">Yesterday</a>
+        <a class="btn btn-outline btn-sm" href="?date_from={{ month_start|date:'Y-m-d' }}&amp;date_to={{ today|date:'Y-m-d' }}">This month</a>
+        <a class="btn btn-outline btn-sm" href="?created_on={{ today|date:'Y-m-d' }}">Created today</a>
+      </div>
+
+      {% if filter_form.errors %}
+        <div class="alert alert-error mt-2">
+          {% for field, errors in filter_form.errors.items %}
+            <div>{{ errors|join:", " }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="flex mt-2">
+        <button type="submit" class="btn btn-primary">Apply filters</button>
+        <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline">Clear</a>
+        <span class="spacer"></span>
+        <a class="btn btn-outline btn-sm" href="?payment=OUTSTANDING">Show money owed</a>
+        <a class="btn btn-outline btn-sm" href="?payment=OVERDUE">Show overdue</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# -------------------------------------------------------------- table --- #}
+<div class="card">
+  <div class="card-head">
+    <h2>Bills</h2>
+    <span class="hint">Newest first</span>
+  </div>
+
+  <div class="table-scroll">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Bill no</th>
+          <th>Date</th>
+          <th>Customer</th>
+          <th>Phone</th>
+          <th>City</th>
+          <th class="num">Total</th>
+          <th class="num">Paid</th>
+          <th class="num">Balance</th>
+          <th>Status</th>
+          <th>Due</th>
+          <th class="center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for invoice in invoices %}
+          <tr>
+            <td class="nowrap">
+              <a href="{{ invoice.get_absolute_url }}" class="mono"><strong>{{ invoice.number }}</strong></a>
+              {% if invoice.print_count %}
+                <span class="badge badge-muted" title="Printed {{ invoice.print_count }} time(s)">
+                  &#128424; {{ invoice.print_count }}
+                </span>
+              {% endif %}
+            </td>
+            <td class="nowrap">{{ invoice.invoice_date|date:"d M Y" }}</td>
+            <td>
+              <a href="{{ invoice.get_absolute_url }}">{{ invoice.customer_name }}</a>
+              {% if invoice.customer_email %}
+                <div class="small muted">{{ invoice.customer_email }}</div>
+              {% endif %}
+            </td>
+            <td class="nowrap mono">{{ invoice.customer_phone }}</td>
+            <td>{{ invoice.customer_city }}</td>
+            <td class="num nowrap">{{ invoice.grand_total|inr }}</td>
+            <td class="num nowrap">{{ invoice.paid_amount|inr }}</td>
+            <td class="num nowrap">
+              {% if invoice.amount_pending %}
+                <span class="text-danger">{{ invoice.amount_pending|inr }}</span>
+              {% elif invoice.amount_overpaid %}
+                <span style="color:var(--info)">+{{ invoice.amount_overpaid|inr }}</span>
+              {% else %}
+                <span class="muted">0.00</span>
+              {% endif %}
+            </td>
+            <td>{% status_badge invoice %}</td>
+            <td class="nowrap small">
+              {% if invoice.due_date %}
+                <span class="{% if invoice.is_overdue %}text-danger{% endif %}">
+                  {{ invoice.due_date|date:"d M Y" }}
+                </span>
+              {% else %}
+                <span class="muted">&ndash;</span>
+              {% endif %}
+            </td>
+            <td class="center nowrap">
+              <a href="{% url 'billing:invoice_pdf' invoice.pk %}?download=1"
+                 class="btn btn-outline btn-sm" title="Download PDF">PDF</a>
+              <form method="post" action="{% url 'billing:invoice_print' invoice.pk %}"
+                    style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-outline btn-sm" title="Print again">Print</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="11">
+              <div class="empty">
+                <div class="big">&#129534;</div>
+                {% if is_filtered %}
+                  <p>No bills match these filters.</p>
+                  <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline btn-sm">Clear filters</a>
+                {% else %}
+                  <p>No bills yet.</p>
+                  <a href="{% url 'billing:invoice_create' %}" class="btn btn-primary btn-sm">Create the first bill</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+
+      {% if invoices %}
+        <tfoot>
+          <tr>
+            <td colspan="5">
+              Totals across all {{ summary.count }} matching bill(s)
+              <span class="small muted">(not just this page)</span>
+            </td>
+            <td class="num">{{ summary.billed|inr }}</td>
+            <td class="num">{{ summary.received|inr }}</td>
+            <td class="num text-danger">{{ summary.pending|inr }}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <div class="pagination">
+      {% if page_obj.has_previous %}
+        <a href="?page=1{{ querystring }}">&laquo; First</a>
+        <a href="?page={{ page_obj.previous_page_number }}{{ querystring }}">Previous</a>
+      {% else %}
+        <span class="disabled">&laquo; First</span>
+      {% endif %}
+
+      <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{{ querystring }}">Next</a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{{ querystring }}">Last &raquo;</a>
+      {% else %}
+        <span class="disabled">Last &raquo;</span>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

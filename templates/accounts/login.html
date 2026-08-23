@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block main_class %}auth-shell{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+  <div class="auth-head">
+    <div class="logo">{{ shop.name|slice:":1"|upper|default:"S" }}</div>
+    <h1>{{ shop.name|default:"Shop Billing" }}</h1>
+    <p>Sign in to create and print bills</p>
+  </div>
+
+  <div class="auth-body">
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-error">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="field {% if form.username.errors %}has-error{% endif %}">
+        <label for="{{ form.username.id_for_label }}" class="req">{{ form.username.label }}</label>
+        {{ form.username }}
+        {{ form.username.errors }}
+      </div>
+
+      <div class="field {% if form.password.errors %}has-error{% endif %}">
+        <label for="{{ form.password.id_for_label }}" class="req">{{ form.password.label }}</label>
+        {{ form.password }}
+        {{ form.password.errors }}
+      </div>
+
+      <div class="field form-check">
+        {{ form.remember_me }}
+        <label for="{{ form.remember_me.id_for_label }}">{{ form.remember_me.label }}</label>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block btn-lg" {% if locked_out %}disabled{% endif %}>
+        Sign in
+      </button>
+
+      {% if locked_out %}
+        <p class="form-text text-danger mt-1">
+          Too many failed attempts from this computer. Try again in a few minutes.
+        </p>
+      {% endif %}
+
+      <input type="hidden" name="next" value="{{ next }}">
+    </form>
+  </div>
+
+  <div class="auth-foot">
+    <a href="{% url 'accounts:password_reset' %}">Forgot your password?</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% load static billing_extras %}
+
+{% block title %}{% if is_edit %}Edit {{ invoice.number }}{% else %}New bill{% endif %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if is_edit %}Edit bill {{ invoice.number }}{% else %}New bill{% endif %}</h1>
+    <p class="sub">
+      Fields marked <span class="text-danger">*</span> are required.
+      Bill format: <strong>{{ engine }}</strong> engine.
+    </p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline">Cancel</a>
+  </div>
+</div>
+
+<form method="post" novalidate id="invoice-form"
+      data-lookup-url="{% url 'billing:customer_lookup' %}"
+      data-default-city="{{ default_city }}">
+  {% csrf_token %}
+
+  {% if form.non_field_errors or formset.non_form_errors %}
+    <div class="alert alert-error">
+      {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      {% for error in formset.non_form_errors %}<div>{{ error }}</div>{% endfor %}
+    </div>
+  {% endif %}
+
+  {# ------------------------------------------------------ customer ----- #}
+  <div class="card">
+    <div class="card-head">
+      <h2>Customer</h2>
+      <span class="hint" id="customer-hint"></span>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="field {% if form.customer_name.errors %}has-error{% endif %}">
+          <label for="{{ form.customer_name.id_for_label }}" class="req">{{ form.customer_name.label }}</label>
+          {{ form.customer_name }}
+          {{ form.customer_name.errors }}
+        </div>
+
+        <div class="field {% if form.customer_phone.errors %}has-error{% endif %}">
+          <label for="{{ form.customer_phone.id_for_label }}" class="req">{{ form.customer_phone.label }}</label>
+          {{ form.customer_phone }}
+          {{ form.customer_phone.errors }}
+        </div>
+
+        <div class="field {% if form.customer_email.errors %}has-error{% endif %}">
+          <label for="{{ form.customer_email.id_for_label }}">{{ form.customer_email.label }}</label>
+          {{ form.customer_email }}
+          {{ form.customer_email.errors }}
+        </div>
+
+        <div class="field {% if form.customer_city.errors %}has-error{% endif %}">
+          <label for="{{ form.customer_city.id_for_label }}">{{ form.customer_city.label }}</label>
+          {{ form.customer_city }}
+          <div class="form-text">Leave blank for {{ default_city }}.</div>
+          {{ form.customer_city.errors }}
+        </div>
+
+        <div class="field {% if form.invoice_date.errors %}has-error{% endif %}">
+          <label for="{{ form.invoice_date.id_for_label }}" class="req">Bill date</label>
+          {{ form.invoice_date }}
+          {{ form.invoice_date.errors }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ------------------------------------------------------ line items --- #}
+  <div class="card">
+    <div class="card-head">
+      <h2>Items</h2>
+      <span class="hint">
+        Rate is required. Discount is optional - leave it blank or 0 and it will
+        not appear on the bill.
+      </span>
+    </div>
+
+    <div class="card-body tight table-scroll">
+      {{ formset.management_form }}
+
+      <table class="items-table" id="items-table">
+        <thead>
+          <tr>
+            <th class="li-sr">#</th>
+            <th class="col-desc">Item / description <span class="text-danger">*</span></th>
+            <th class="col-qty">Qty</th>
+            <th class="col-unit li-hide-sm">Unit</th>
+            <th class="col-rate">Rate <span class="text-danger">*</span></th>
+            <th class="col-dtype">Discount type</th>
+            <th class="col-dval">Discount</th>
+            <th class="li-amount">Amount</th>
+            <th class="col-del"></th>
+          </tr>
+        </thead>
+        <tbody id="items-body">
+          {% for item_form in formset %}
+            <tr class="li-row">
+              {{ item_form.id }}
+              <td class="li-sr"><span class="row-number">{{ forloop.counter }}</span></td>
+              <td class="col-desc {% if item_form.description.errors %}has-error{% endif %}">
+                {{ item_form.description }}
+                {{ item_form.description.errors }}
+              </td>
+              <td class="col-qty {% if item_form.quantity.errors %}has-error{% endif %}">
+                {{ item_form.quantity }}
+                {{ item_form.quantity.errors }}
+              </td>
+              <td class="col-unit li-hide-sm">{{ item_form.unit }}</td>
+              <td class="col-rate {% if item_form.rate.errors %}has-error{% endif %}">
+                {{ item_form.rate }}
+                {{ item_form.rate.errors }}
+              </td>
+              <td class="col-dtype">{{ item_form.discount_type }}</td>
+              <td class="col-dval {% if item_form.discount_value.errors %}has-error{% endif %}">
+                {{ item_form.discount_value }}
+                {{ item_form.discount_value.errors }}
+              </td>
+              <td class="li-amount">
+                <span class="row-amount">0.00</span>
+                <span class="disc row-discount"></span>
+              </td>
+              <td class="col-del">
+                <button type="button" class="btn-row-del" title="Remove this row"
+                        aria-label="Remove row">&minus;</button>
+                <span style="display:none">{{ item_form.DELETE }}</span>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {# Blueprint used by the JS to build new rows #}
+      <template id="empty-row-template">
+        <tr class="li-row">
+          <td class="li-sr"><span class="row-number"></span></td>
+          <td class="col-desc">{{ formset.empty_form.description }}</td>
+          <td class="col-qty">{{ formset.empty_form.quantity }}</td>
+          <td class="col-unit li-hide-sm">{{ formset.empty_form.unit }}</td>
+          <td class="col-rate">{{ formset.empty_form.rate }}</td>
+          <td class="col-dtype">{{ formset.empty_form.discount_type }}</td>
+          <td class="col-dval">{{ formset.empty_form.discount_value }}</td>
+          <td class="li-amount">
+            <span class="row-amount">0.00</span>
+            <span class="disc row-discount"></span>
+          </td>
+          <td class="col-del">
+            <button type="button" class="btn-row-del" title="Remove this row"
+                    aria-label="Remove row">&minus;</button>
+            <span style="display:none">{{ formset.empty_form.DELETE }}</span>
+          </td>
+        </tr>
+      </template>
+    </div>
+
+    <div class="card-foot">
+      <button type="button" class="btn btn-outline btn-sm" id="add-row">+ Add another item</button>
+      <span class="spacer"></span>
+      <span class="small muted"><span id="row-count">0</span> item(s) on this bill</span>
+    </div>
+  </div>
+
+  {# ------------------------------------------------- totals + payment -- #}
+  <div class="card">
+    <div class="card-body">
+      <div class="totals-grid">
+
+        {# ---- payment state: exactly one of four ---- #}
+        <div>
+          <div class="field-label req">Payment status</div>
+          <div class="pay-options" id="pay-options">
+            {% for radio in form.payment_status %}
+              <label class="pay-option" data-value="{{ radio.data.value }}">
+                {{ radio.tag }}
+                <span>
+                  {{ radio.choice_label }}
+                  <span class="desc">
+                    {% if radio.data.value == 'PAID' %}The customer paid the full amount.
+                    {% elif radio.data.value == 'OVERPAID' %}The customer paid more than the total; the extra must be returned.
+                    {% elif radio.data.value == 'UNDERPAID' %}Part of the amount was received; a due date is required.
+                    {% else %}Nothing was received yet; a due date is required.
+                    {% endif %}
+                  </span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          {{ form.payment_status.errors }}
+
+          <div class="form-row mt-2">
+            <div class="field conditional {% if form.paid_amount.errors %}has-error{% endif %}" id="paid-wrap">
+              <label for="{{ form.paid_amount.id_for_label }}">{{ form.paid_amount.label }}</label>
+              {{ form.paid_amount }}
+              {{ form.paid_amount.errors }}
+            </div>
+
+            <div class="field conditional {% if form.due_date.errors %}has-error{% endif %}" id="due-wrap">
+              <label for="{{ form.due_date.id_for_label }}" class="req">{{ form.due_date.label }}</label>
+              {{ form.due_date }}
+              {{ form.due_date.errors }}
+            </div>
+          </div>
+
+          <div class="field mt-1">
+            <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+            {{ form.notes }}
+          </div>
+        </div>
+
+        {# ---- live totals ---- #}
+        <div>
+          <table class="totals">
+            <tr>
+              <td>Subtotal</td>
+              <td><span id="t-subtotal">0.00</span></td>
+            </tr>
+            <tr class="muted" id="t-discount-row" style="display:none">
+              <td>Total discount</td>
+              <td>&minus; <span id="t-discount">0.00</span></td>
+            </tr>
+            <tr class="grand">
+              <td>Total payable</td>
+              <td>{{ currency }} <span id="t-total">0.00</span></td>
+            </tr>
+            <tr class="muted">
+              <td>Amount received</td>
+              <td><span id="t-paid">0.00</span></td>
+            </tr>
+            <tr class="pending" id="t-pending-row" style="display:none">
+              <td>Balance pending</td>
+              <td><span id="t-pending">0.00</span></td>
+            </tr>
+            <tr class="overpaid" id="t-overpaid-row" style="display:none">
+              <td>Overpaid (return)</td>
+              <td><span id="t-overpaid">0.00</span></td>
+            </tr>
+          </table>
+          <p class="small muted mt-1" id="t-words"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="sticky-actions">
+      <button type="submit" name="action" value="save" class="btn btn-outline btn-lg">
+        Save
+      </button>
+      <button type="submit" name="action" value="save_print" class="btn btn-primary btn-lg">
+        Save &amp; Print
+      </button>
+      <span class="spacer"></span>
+      <span class="small muted">
+        Printer: <strong>{{ print_backend|default:"dummy" }}</strong> backend
+        &nbsp;&middot;&nbsp; Format: <strong>{{ engine }}</strong>
+      </span>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/invoice_form.js' %}"></script>
+{% endblock %}

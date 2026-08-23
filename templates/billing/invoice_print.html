@@ -1,0 +1,175 @@
+{% load billing_extras %}<!doctype html>
+{% comment %}
+  Fallback bill layout, rendered by xhtml2pdf.
+
+  The Word template is the real format; this exists so a bill can always be
+  produced. xhtml2pdf understands only basic CSS, so everything here is
+  tables and absolute widths - no flexbox, no grid, no CSS variables.
+{% endcomment %}
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ invoice_number }}</title>
+  <style>
+    @page { size: a4 portrait; margin: 1.2cm 1.1cm; }
+
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #17222e; }
+
+    .shop-name   { font-size: 19pt; font-weight: bold; text-align: center; }
+    .shop-line   { font-size: 8.5pt; text-align: center; color: #333; }
+    .rule        { border-bottom: 1px solid #999; margin: 6px 0 8px; }
+    .doc-title   { font-size: 12pt; font-weight: bold; text-align: center; letter-spacing: 2px; }
+
+    table        { width: 100%; border-collapse: collapse; }
+    td, th       { vertical-align: top; }
+
+    .meta td     { font-size: 9pt; padding: 1px 0; }
+    .meta .label { color: #555; }
+    .meta .right { text-align: right; }
+
+    table.items          { margin-top: 8px; }
+    table.items th       { background-color: #eceff2; border: 0.6pt solid #b9c0c8;
+                           padding: 4px 5px; font-size: 8pt; text-align: left; }
+    table.items td       { border: 0.6pt solid #ced4da; padding: 4px 5px; font-size: 9pt; }
+    table.items .num     { text-align: right; }
+    table.items .center  { text-align: center; }
+    .disc                { font-size: 7.5pt; color: #12805c; }
+
+    table.sum            { width: 46%; margin-left: 54%; margin-top: 8px; }
+    table.sum td         { padding: 2.5px 4px; font-size: 9.5pt; }
+    table.sum .k         { text-align: right; color: #333; }
+    table.sum .v         { text-align: right; width: 38%; }
+    table.sum .grand .k,
+    table.sum .grand .v  { font-size: 11.5pt; font-weight: bold;
+                           border-top: 1pt solid #666; padding-top: 4px; }
+    .pending             { color: #b42318; font-weight: bold; }
+    .overpaid            { color: #1a56db; font-weight: bold; }
+
+    .words   { margin-top: 8px; font-size: 9pt; font-weight: bold; }
+    .payline { margin-top: 4px; font-size: 9pt; }
+    .note    { margin-top: 4px; font-size: 8.5pt; color: #444; }
+    .terms   { margin-top: 10px; font-size: 7.5pt; color: #555; }
+    .footer  { margin-top: 12px; text-align: center; font-size: 9pt; font-weight: bold; }
+    .stamp   { margin-top: 4px; text-align: center; font-size: 7pt; color: #888; }
+    .sign td { padding-top: 26px; font-size: 8pt; }
+  </style>
+</head>
+<body>
+
+  {# ------------------------------------------------------- letterhead --- #}
+  <div class="shop-name">{{ shop_name }}</div>
+  {% if shop_tagline %}<div class="shop-line"><i>{{ shop_tagline }}</i></div>{% endif %}
+  {% if shop_address %}<div class="shop-line">{{ shop_address }}</div>{% endif %}
+  <div class="shop-line">
+    {% if shop_phone %}Phone: {{ shop_phone }}{% endif %}
+    {% if shop_email %} &nbsp;|&nbsp; {{ shop_email }}{% endif %}
+  </div>
+  {% if shop_gstin %}<div class="shop-line">GSTIN: {{ shop_gstin }}</div>{% endif %}
+
+  <div class="rule"></div>
+  <div class="doc-title">INVOICE</div>
+  <div class="rule"></div>
+
+  {# ----------------------------------------------- customer / bill no --- #}
+  <table class="meta">
+    <tr>
+      <td width="58%">
+        <b>BILL TO</b><br>
+        <b>{{ customer_name }}</b><br>
+        <span class="label">Phone:</span> {{ customer_phone }}<br>
+        {% if has_email %}<span class="label">Email:</span> {{ customer_email }}<br>{% endif %}
+        <span class="label">City:</span> {{ customer_city }}
+      </td>
+      <td width="42%" class="right">
+        <b>Bill No:</b> {{ invoice_number }}<br>
+        <b>Date:</b> {{ invoice_date }}<br>
+        {% if printed_by %}<span class="label">Billed by:</span> {{ printed_by }}{% endif %}
+      </td>
+    </tr>
+  </table>
+
+  {# ------------------------------------------------------- line items --- #}
+  <table class="items">
+    <thead>
+      <tr>
+        <th width="6%" class="center">Sr.</th>
+        <th width="38%">Item / Description</th>
+        <th width="9%" class="center">Qty</th>
+        <th width="15%" class="num">Rate</th>
+        <th width="15%" class="num">Discount</th>
+        <th width="17%" class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+        <tr>
+          <td class="center">{{ item.sr }}</td>
+          <td>{{ item.description }}</td>
+          <td class="center">{{ item.qty }}{% if item.unit %} {{ item.unit }}{% endif %}</td>
+          <td class="num">{{ item.rate }}</td>
+          <td class="num">
+            {% if item.has_discount %}<span class="disc">{{ item.discount_label }}</span>{% endif %}
+          </td>
+          <td class="num">{{ item.amount }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ---------------------------------------------------------- totals --- #}
+  <table class="sum">
+    <tr>
+      <td class="k">Subtotal</td>
+      <td class="v">{{ currency }} {{ subtotal }}</td>
+    </tr>
+    {% if has_discount %}
+      <tr>
+        <td class="k">Total discount</td>
+        <td class="v">- {{ currency }} {{ total_discount }}</td>
+      </tr>
+    {% endif %}
+    <tr class="grand">
+      <td class="k">TOTAL PAYABLE</td>
+      <td class="v">{{ currency }} {{ grand_total }}</td>
+    </tr>
+    <tr>
+      <td class="k">Amount received</td>
+      <td class="v">{{ currency }} {{ paid_amount }}</td>
+    </tr>
+    {% if has_pending %}
+      <tr>
+        <td class="k pending">Balance pending</td>
+        <td class="v pending">{{ currency }} {{ pending_amount }}</td>
+      </tr>
+    {% endif %}
+    {% if has_overpaid %}
+      <tr>
+        <td class="k overpaid">Overpaid (to return)</td>
+        <td class="v overpaid">{{ currency }} {{ overpaid_amount }}</td>
+      </tr>
+    {% endif %}
+  </table>
+
+  <div class="words">Amount in words: {{ grand_total_words }}</div>
+  <div class="payline">Payment status: <b>{{ payment_status_label }}</b></div>
+  {% if has_due_date %}
+    <div class="payline pending">Payment due by: {{ due_date }}</div>
+  {% endif %}
+  {% if notes %}<div class="note">Note: {{ notes }}</div>{% endif %}
+
+  {% if shop_terms %}<div class="terms">{{ shop_terms|linebreaksbr }}</div>{% endif %}
+
+  <table class="sign">
+    <tr>
+      <td width="50%">Customer signature</td>
+      <td width="50%" style="text-align:right">
+        {% if show_signature_line %}For {{ shop_name }}{% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <div class="footer">{{ shop_footer_note }}</div>
+  <div class="stamp">Bill dated {{ invoice_date }} &middot; printed on {{ printed_on }}</div>
+
+</body>
+</html>

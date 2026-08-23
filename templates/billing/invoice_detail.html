@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% load billing_extras %}
+
+{% block title %}{{ invoice.number }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Bill {{ invoice.number }}</h1>
+    <p class="sub">
+      {{ invoice.customer_name }} &middot; {{ invoice.invoice_date|date:"d M Y" }}
+      &middot; {% status_badge invoice %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline">Back to list</a>
+    <a href="{% url 'billing:invoice_update' invoice.pk %}" class="btn btn-outline">Edit</a>
+    <a href="{% url 'billing:invoice_pdf' invoice.pk %}?download=1" class="btn btn-outline">Download PDF</a>
+    <form method="post" action="{% url 'billing:invoice_print' invoice.pk %}" style="display:inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Print again</button>
+    </form>
+  </div>
+</div>
+
+<div class="totals-grid">
+  <div>
+    {# ------------------------------------------------------ customer --- #}
+    <div class="card">
+      <div class="card-head">
+        <h2>Customer</h2>
+        <span class="hint">Snapshot taken when the bill was issued</span>
+      </div>
+      <div class="card-body">
+        <dl class="kv">
+          <dt>Name</dt><dd>{{ invoice.customer_name }}</dd>
+          <dt>Phone</dt><dd class="mono">{{ invoice.customer_phone }}</dd>
+          <dt>Email</dt><dd>{{ invoice.customer_email|default:"&ndash;" }}</dd>
+          <dt>City</dt><dd>{{ invoice.customer_city }}</dd>
+          <dt>Bill date</dt><dd>{{ invoice.invoice_date|date:"d M Y" }}</dd>
+          <dt>Created</dt>
+          <dd>
+            {{ invoice.created_at|date:"d M Y, g:i a" }}
+            {% if invoice.created_by %}by {{ invoice.created_by.get_short_name }}{% endif %}
+          </dd>
+          {% if invoice.notes %}<dt>Note</dt><dd>{{ invoice.notes }}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {# --------------------------------------------------------- items --- #}
+    <div class="card">
+      <div class="card-head">
+        <h2>Items</h2>
+        <span class="hint">{{ items|length }} line(s)</span>
+      </div>
+      <div class="table-scroll">
+        <table class="data">
+          <thead>
+            <tr>
+              <th style="width:36px">#</th>
+              <th>Item</th>
+              <th class="num">Qty</th>
+              <th class="num">Rate</th>
+              <th class="num">Discount</th>
+              <th class="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ item.description }}</td>
+                <td class="num">{{ item.quantity|floatformat:"-2" }} {{ item.unit }}</td>
+                <td class="num">
+                  {{ item.rate|inr }}
+                  {% if item.has_discount %}
+                    <div class="small text-ok">{{ item.discount_label }}</div>
+                  {% endif %}
+                </td>
+                <td class="num">
+                  {% if item.has_discount %}
+                    &minus;{{ item.discount_amount|inr }}
+                  {% else %}
+                    <span class="muted">&ndash;</span>
+                  {% endif %}
+                </td>
+                <td class="num"><strong>{{ item.net_amount|inr }}</strong></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5" class="text-right">Subtotal</td>
+              <td class="num">{{ invoice.subtotal|inr }}</td>
+            </tr>
+            {% if invoice.total_discount %}
+              <tr>
+                <td colspan="5" class="text-right">Total discount</td>
+                <td class="num text-ok">&minus;{{ invoice.total_discount|inr }}</td>
+              </tr>
+            {% endif %}
+            <tr>
+              <td colspan="5" class="text-right">Total payable</td>
+              <td class="num">{{ invoice.grand_total|money }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="card-foot">
+        <span class="small muted">{{ invoice.grand_total|in_words }}</span>
+      </div>
+    </div>
+
+    {# ---------------------------------------------------- print jobs --- #}
+    <div class="card">
+      <div class="card-head">
+        <h2>Print history</h2>
+        <span class="hint">
+          {{ invoice.print_count }} print(s)
+          {% if invoice.last_printed_at %}&middot; last {{ invoice.last_printed_at|date:"d M Y, g:i a" }}{% endif %}
+        </span>
+      </div>
+      <div class="table-scroll">
+        <table class="data">
+          <thead>
+            <tr><th>When</th><th>Backend</th><th>Printer</th><th>Copies</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            {% for job in print_jobs %}
+              <tr>
+                <td class="nowrap small">{{ job.created_at|date:"d M Y, g:i a" }}</td>
+                <td class="mono small">{{ job.backend }}</td>
+                <td class="small">{{ job.printer_name|default:"(default)" }}</td>
+                <td class="center">{{ job.copies }}</td>
+                <td>
+                  {% if job.status == 'SENT' %}<span class="badge badge-ok">Sent</span>
+                  {% elif job.status == 'MOCKED' %}<span class="badge badge-info">Mocked</span>
+                  {% else %}<span class="badge badge-danger">Failed</span>{% endif %}
+                  <div class="small muted">{{ job.message|truncatechars:110 }}</div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5"><div class="empty">Not printed yet.</div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ------------------------------------------------------- side panel --- #}
+  <div>
+    <div class="card">
+      <div class="card-head"><h2>Payment</h2></div>
+      <div class="card-body">
+        <table class="totals">
+          <tr><td>Total payable</td><td>{{ invoice.grand_total|inr }}</td></tr>
+          <tr class="muted"><td>Received</td><td>{{ invoice.paid_amount|inr }}</td></tr>
+          {% if invoice.amount_pending %}
+            <tr class="pending"><td>Pending</td><td>{{ invoice.amount_pending|inr }}</td></tr>
+          {% endif %}
+          {% if invoice.amount_overpaid %}
+            <tr class="overpaid"><td>Overpaid</td><td>{{ invoice.amount_overpaid|inr }}</td></tr>
+          {% endif %}
+          <tr class="grand"><td>Status</td><td>{% status_badge invoice %}</td></tr>
+        </table>
+
+        {% if invoice.due_date %}
+          <p class="mt-1 {% if invoice.is_overdue %}text-danger{% endif %}">
+            <strong>Due {{ invoice.due_date|date:"d M Y" }}</strong>
+            {% if invoice.is_overdue %}&nbsp;(overdue){% endif %}
+          </p>
+        {% endif %}
+      </div>
+
+      {% if invoice.amount_pending %}
+        <div class="card-foot" style="display:block">
+          <form method="post" action="{% url 'billing:invoice_record_payment' invoice.pk %}">
+            {% csrf_token %}
+            <div class="field">
+              <label for="{{ payment_form.amount.id_for_label }}">{{ payment_form.amount.label }}</label>
+              {{ payment_form.amount }}
+            </div>
+            <div class="field">
+              <label for="{{ payment_form.new_due_date.id_for_label }}">{{ payment_form.new_due_date.label }}</label>
+              {{ payment_form.new_due_date }}
+            </div>
+            <button type="submit" class="btn btn-success btn-block">Record payment</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Document</h2></div>
+      <div class="card-body">
+        <div class="flex">
+          <a href="{% url 'billing:invoice_pdf' invoice.pk %}" target="_blank"
+             class="btn btn-outline btn-sm">Open PDF</a>
+          <a href="{% url 'billing:invoice_pdf' invoice.pk %}?download=1"
+             class="btn btn-outline btn-sm">Download</a>
+          <a href="{% url 'billing:invoice_browser_print' invoice.pk %}?auto=0"
+             class="btn btn-outline btn-sm">Print via browser</a>
+          <a href="{% url 'billing:invoice_preview' invoice.pk %}" target="_blank"
+             class="btn btn-outline btn-sm">HTML preview</a>
+        </div>
+        <p class="form-text mt-1">
+          The PDF is regenerated from the saved data every time, so it always
+          matches this page.
+        </p>
+
+        {% if invoice.pdf_path %}
+          <div class="divider"></div>
+          <div class="field-label">Saved on this computer</div>
+          <div class="mono small" style="word-break:break-all">{{ invoice.pdf_path }}</div>
+          <p class="form-text">
+            {% if invoice.pdf_exists %}
+              <span class="dot dot-ok"></span>File present
+            {% else %}
+              <span class="dot dot-bad"></span>File missing - it was moved or deleted
+            {% endif %}
+            {% if invoice.pdf_saved_at %}
+              &middot; saved {{ invoice.pdf_saved_at|date:"d M Y, g:i a" }}
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Danger zone</h2></div>
+      <div class="card-body">
+        <form method="post" action="{% url 'billing:invoice_delete' invoice.pk %}"
+              onsubmit="return confirm('Delete bill {{ invoice.number }}? This cannot be undone.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-block btn-sm">Delete this bill</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

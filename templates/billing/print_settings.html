@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Printing{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Printing &amp; bill format</h1>
+    <p class="sub">Open this page first whenever a bill does not come out of the printer.</p>
+  </div>
+  <div class="page-actions">
+    <form method="post" action="{% url 'billing:print_test' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Send a test print</button>
+    </form>
+  </div>
+</div>
+
+{# ------------------------------------------------------------ pipeline --- #}
+<div class="card">
+  <div class="card-head">
+    <h2>Pipeline</h2>
+    <span class="hint">Word template &rarr; filled .docx &rarr; PDF &rarr; printer</span>
+  </div>
+  <div class="card-body">
+    <dl class="kv">
+      <dt>Document engine</dt>
+      <dd>
+        <strong>{{ status.document_engine_active }}</strong>
+        {% if status.document_engine_active != status.document_engine_configured %}
+          <span class="badge badge-warn">
+            falling back &mdash; configured as {{ status.document_engine_configured }}
+          </span>
+        {% endif %}
+      </dd>
+
+      <dt>Word template</dt>
+      <dd>
+        <span class="mono small">{{ status.docx_template_path }}</span>
+        {% if status.docx_template_exists %}
+          <span class="badge badge-ok">found</span>
+        {% else %}
+          <span class="badge badge-danger">missing</span>
+        {% endif %}
+      </dd>
+
+      <dt>DOCX &rarr; PDF</dt>
+      <dd>
+        configured: <strong>{{ status.converter.configured }}</strong><br>
+        <span class="dot {% if status.converter.word_available %}dot-ok{% else %}dot-bad{% endif %}"></span>
+        Microsoft Word (COM):
+        {{ status.converter.word_available|yesno:"available,not available" }}<br>
+        <span class="dot {% if status.converter.libreoffice_available %}dot-ok{% else %}dot-bad{% endif %}"></span>
+        LibreOffice:
+        {% if status.converter.libreoffice_available %}
+          <span class="mono small">{{ status.converter.libreoffice_path }}</span>
+        {% else %}not found{% endif %}
+      </dd>
+
+      <dt>Print backend</dt>
+      <dd>
+        <strong>{{ status.print_backend }}</strong>
+        {% if status.print_backend == 'dummy' %}
+          <span class="badge badge-info">mock &mdash; nothing reaches a printer</span>
+        {% endif %}
+      </dd>
+
+      <dt>Printer</dt>
+      <dd>{{ status.printer_name }} &middot; {{ status.print_copies }} copy(ies) per job</dd>
+
+      <dt>Printers detected</dt>
+      <dd>
+        {% if status.printers %}
+          {% for name in status.printers %}<div class="mono small">{{ name }}</div>{% endfor %}
+        {% else %}
+          <span class="muted">None reported by this backend.</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+
+{# ------------------------------------------------------------- folders --- #}
+<div class="card">
+  <div class="card-head">
+    <h2>Folders</h2>
+    <span class="hint">All configurable in <span class="mono">.env</span></span>
+  </div>
+  <div class="card-body">
+    <dl class="kv">
+      <dt>Archived PDFs</dt>
+      <dd><span class="mono small">{{ status.pdf_dir }}</span>
+          <div class="form-text">INVOICE_PDF_DIR</div></dd>
+      <dt>Filled .docx copies</dt>
+      <dd><span class="mono small">{{ status.docx_dir }}</span>
+          <div class="form-text">INVOICE_DOCX_DIR</div></dd>
+      <dt>Mock print spool</dt>
+      <dd><span class="mono small">{{ status.spool_dir }}</span>
+          <div class="form-text">Where the dummy backend drops what it would have printed.</div></dd>
+    </dl>
+  </div>
+</div>
+
+{# -------------------------------------------------------- switch guide --- #}
+<div class="card">
+  <div class="card-head">
+    <h2>Turning on the real printer</h2>
+    <span class="hint">One line in <span class="mono">.env</span>, then restart the server</span>
+  </div>
+  <div class="card-body">
+    <div class="code-block"># .env
+PRINT_BACKEND=windows
+PRINTER_NAME=EPSON L3250 Series      # exact name from Devices and Printers
+PRINT_COPIES=1
+
+# Recommended: makes printing completely dialog-free
+SUMATRA_PDF_PATH=C:/Tools/SumatraPDF/SumatraPDF.exe</div>
+    <p class="form-text mt-1">
+      Backends usable on this machine:
+      {% for name, ok in status.backends.items %}
+        <span class="badge {% if ok %}badge-ok{% else %}badge-muted{% endif %}">{{ name }}</span>
+      {% endfor %}
+    </p>
+  </div>
+</div>
+
+{# ------------------------------------------------------- placeholders --- #}
+<div class="card">
+  <div class="card-head">
+    <h2>Word template placeholders</h2>
+    <span class="hint">Paste these into your .docx exactly as shown</span>
+  </div>
+  <div class="card-body">
+    {% for group, names in placeholders.items %}
+      <h3 class="mt-2">{{ group }}</h3>
+      <div class="flex">
+        {% for name in names %}
+          <span class="badge badge-muted mono">&#123;&#123; {{ name }} &#125;&#125;</span>
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    <h3 class="mt-2">Repeating the item row</h3>
+    <div class="code-block">Put this in a table row ABOVE the data row:   &#123;%tr for item in items %&#125;
+Put this in a table row BELOW the data row:   &#123;%tr endfor %&#125;
+
+Hide a whole paragraph when a value is empty:
+  &#123;%p if has_pending %&#125;Balance: &#123;&#123; pending_amount &#125;&#125;&#123;%p endif %&#125;</div>
+
+    <p class="form-text mt-1">
+      Commands: <span class="mono">python manage.py docx_template --create</span> writes a
+      starter template, <span class="mono">--list</span> prints every placeholder, and
+      <span class="mono">--check</span> renders your template with sample data.
+    </p>
+  </div>
+</div>
+
+{# ---------------------------------------------------------- recent jobs -- #}
+<div class="card">
+  <div class="card-head"><h2>Recent print jobs</h2></div>
+  <div class="table-scroll">
+    <table class="data">
+      <thead>
+        <tr><th>When</th><th>Bill</th><th>Backend</th><th>Result</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for job in recent_jobs %}
+          <tr>
+            <td class="nowrap small">{{ job.created_at|date:"d M Y, g:i a" }}</td>
+            <td><a href="{{ job.invoice.get_absolute_url }}" class="mono">{{ job.invoice.number }}</a></td>
+            <td class="mono small">{{ job.backend }}</td>
+            <td>
+              {% if job.status == 'SENT' %}<span class="badge badge-ok">Sent</span>
+              {% elif job.status == 'MOCKED' %}<span class="badge badge-info">Mocked</span>
+              {% else %}<span class="badge badge-danger">Failed</span>{% endif %}
+            </td>
+            <td class="small muted">{{ job.message|truncatechars:130 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5"><div class="empty">No print jobs yet.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

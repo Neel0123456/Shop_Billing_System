@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Print {{ invoice.number }}{% endblock %}
+
+{% block content %}
+<div class="page-head no-print">
+  <div>
+    <h1>Print {{ invoice.number }}</h1>
+    <p class="sub">
+      The browser print dialog should open by itself. If it does not, use the
+      button below.
+    </p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ invoice.get_absolute_url }}" class="btn btn-outline">Back to bill</a>
+    <button type="button" class="btn btn-primary" id="print-now">Open print dialog</button>
+  </div>
+</div>
+
+<div class="card no-print">
+  <div class="card-body">
+    <iframe id="pdf-frame" class="pdf-frame"
+            src="{% url 'billing:invoice_pdf' invoice.pk %}#toolbar=1"
+            title="Bill {{ invoice.number }}"></iframe>
+    <p class="form-text mt-1">
+      Tip: launching Chrome with <span class="mono">--kiosk-printing</span> makes
+      this path skip the dialog and print straight away.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var frame = document.getElementById("pdf-frame");
+  var button = document.getElementById("print-now");
+
+  function printFrame() {
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    } catch (err) {
+      // Cross-origin or PDF viewer restrictions: fall back to the page dialog.
+      window.print();
+    }
+  }
+
+  button.addEventListener("click", printFrame);
+
+  {% if autoprint %}
+  // Wait for the embedded PDF viewer to be ready before asking it to print.
+  frame.addEventListener("load", function () {
+    setTimeout(printFrame, 700);
+  });
+  {% endif %}
+})();
+</script>
+{% endblock %}

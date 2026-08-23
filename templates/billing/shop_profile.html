@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Shop details{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Shop details</h1>
+    <p class="sub">
+      These values fill the
+      <span class="mono">{% verbatim %}{{ shop_name }}{% endverbatim %}</span>,
+      <span class="mono">{% verbatim %}{{ shop_address }}{% endverbatim %}</span>
+      and related placeholders on every bill.
+    </p>
+  </div>
+</div>
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+
+  <div class="card">
+    <div class="card-head"><h2>Letterhead</h2></div>
+    <div class="card-body">
+      <div class="form-row">
+        {% for field in form %}
+          <div class="field {% if field.errors %}has-error{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {{ field.errors }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card-foot">
+      <button type="submit" class="btn btn-primary">Save shop details</button>
+      <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline">Cancel</a>
+    </div>
+  </div>
+</form>
+{% endblock %}

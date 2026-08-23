@@ -1,0 +1,27 @@
+# ==========================================================================
+# Shop Billing - Windows / local PC deployment
+# ==========================================================================
+
+# ---- Core ----
+Django>=5.2,<6.1
+psycopg[binary]>=3.2            # PostgreSQL driver (DB managed via pgAdmin)
+django-environ>=0.11            # 12-factor .env configuration
+
+# ---- Word template -> PDF pipeline (primary) ----
+docxtpl>=0.18                   # Jinja2 placeholders inside a .docx template
+python-docx>=1.1                # pulled by docxtpl; used to build the sample template
+Pillow>=10.4                    # image handling for logos in the docx/pdf
+
+# ---- HTML -> PDF (fallback engine + on-screen preview) ----
+xhtml2pdf>=0.2.16
+reportlab>=4.2
+
+# ---- Static files / production serving ----
+whitenoise[brotli]>=6.7
+waitress>=3.0                   # production WSGI server for Windows
+
+# ---- Windows printing + Word COM automation ----
+pywin32>=306 ; sys_platform == "win32"
+
+# ---- Optional: thermal / receipt printers ----
+python-escpos>=3.1

@@ -1,0 +1,35 @@
+# --- Python / virtualenv ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# --- Secrets ---
+# Never commit the real .env; only .env.example is tracked.
+.env
+.env.local
+.env.production
+!.env.example
+
+# --- Local database ---
+*.sqlite3
+db.sqlite3
+
+# --- Generated at runtime ---
+# Archived bill PDFs / .docx and the print spool.
+/media/
+/logs/
+# Output of collectstatic.
+/staticfiles/
+# Throwaway output of `manage.py docx_template --check`.
+doc_templates/*__check.docx
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db

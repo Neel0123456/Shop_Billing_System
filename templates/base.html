@@ -1,0 +1,60 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Billing{% endblock %} | {{ shop.name|default:"Shop Billing" }}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129534;</text></svg>">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+
+{% if user.is_authenticated %}
+<header class="topbar no-print">
+  <div class="topbar-inner">
+    <a class="brand" href="{% url 'billing:invoice_list' %}">
+      <span class="brand-mark">{{ shop.name|slice:":1"|upper|default:"S" }}</span>
+      <span>{{ shop.name|default:"Shop Billing" }}</span>
+    </a>
+
+    <nav class="nav">
+      <a href="{% url 'billing:invoice_list' %}"
+         class="{% if request.resolver_match.url_name == 'invoice_list' %}active{% endif %}">All bills</a>
+      <a href="{% url 'billing:invoice_create' %}"
+         class="{% if request.resolver_match.url_name == 'invoice_create' %}active{% endif %}">New bill</a>
+
+      <span class="nav-sep"></span>
+
+      <a href="{% url 'billing:shop_profile' %}"
+         class="{% if request.resolver_match.url_name == 'shop_profile' %}active{% endif %}">Shop</a>
+      <a href="{% url 'billing:print_settings' %}"
+         class="{% if request.resolver_match.url_name == 'print_settings' %}active{% endif %}">Printing</a>
+
+      <span class="nav-sep"></span>
+
+      <a href="{% url 'accounts:profile' %}">{{ user.get_short_name }}</a>
+      <form method="post" action="{% url 'accounts:logout' %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit">Sign out</button>
+      </form>
+    </nav>
+  </div>
+</header>
+{% endif %}
+
+<main class="{% block main_class %}wrap{% endblock %}">
+  {% if messages %}
+    <div class="messages no-print">
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

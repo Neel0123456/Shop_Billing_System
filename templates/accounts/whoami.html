@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Session{% endblock %}
+{% block main_class %}wrap wrap-narrow{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-head"><h2>Session</h2></div>
+  <div class="card-body">
+    <dl class="kv">
+      <dt>Email</dt><dd>{{ user.email }}</dd>
+      <dt>Name</dt><dd>{{ user.get_full_name }}</dd>
+      <dt>Staff</dt><dd>{{ user.is_staff|yesno:"yes,no" }}</dd>
+      <dt>Session expires</dt><dd>{{ request.session.get_expiry_date }}</dd>
+    </dl>
+  </div>
+</div>
+{% endblock %}

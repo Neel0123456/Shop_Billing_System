@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}My account{% endblock %}
+{% block main_class %}wrap wrap-narrow{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>My account</h1>
+    <p class="sub">Signed in as {{ user.email }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Details</h2></div>
+  <div class="card-body">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field {% if field.errors %}has-error{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary mt-1">Save</button>
+    </form>
+  </div>
+  <div class="card-foot">
+    <a href="{% url 'accounts:password_change' %}" class="btn btn-outline btn-sm">Change password</a>
+    <span class="spacer"></span>
+    <span class="small muted">Last login: {{ user.last_login|date:"d M Y, g:i a"|default:"-" }}</span>
+  </div>
+</div>
+{% endblock %}
