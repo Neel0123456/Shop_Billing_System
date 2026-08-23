@@ -47,6 +47,12 @@ class ShopProfile(models.Model):
     """
 
     name = models.CharField(max_length=150, default="My Shop")
+    owner_name = models.CharField(
+        "Owner / proprietor",
+        max_length=150,
+        blank=True,
+        help_text="Printed on the bill, e.g. 'Proprietor: Pashv'.",
+    )
     tagline = models.CharField(max_length=200, blank=True)
     address_line1 = models.CharField(max_length=200, blank=True)
     address_line2 = models.CharField(max_length=200, blank=True)

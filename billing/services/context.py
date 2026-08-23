@@ -7,7 +7,7 @@ into his document and never has to think about rounding or currency symbols.
 
 Placeholder reference (also printed by `manage.py docx_template --list`):
 
-  Shop        shop_name, shop_tagline, shop_address, shop_address_line1,
+  Shop        shop_name, shop_owner, shop_tagline, shop_address, shop_address_line1,
               shop_address_line2, shop_city, shop_state, shop_pincode,
               shop_phone, shop_alt_phone, shop_email, shop_gstin,
               shop_footer_note, shop_terms
@@ -84,6 +84,7 @@ def build_invoice_context(invoice, *, printed_by=None, for_html: bool = False) -
         # --- shop ---------------------------------------------------------
         "shop": shop if for_html else None,
         "shop_name": shop.name,
+        "shop_owner": shop.owner_name,
         "shop_tagline": shop.tagline,
         "shop_address": ", ".join(shop.address_block),
         "shop_address_line1": shop.address_line1,
@@ -151,7 +152,7 @@ def build_invoice_context(invoice, *, printed_by=None, for_html: bool = False) -
 
 PLACEHOLDER_GROUPS = {
     "Shop": [
-        "shop_name", "shop_tagline", "shop_address", "shop_address_line1",
+        "shop_name", "shop_owner", "shop_tagline", "shop_address", "shop_address_line1",
         "shop_address_line2", "shop_city", "shop_state", "shop_pincode",
         "shop_phone", "shop_alt_phone", "shop_email", "shop_gstin",
         "shop_footer_note", "shop_terms",

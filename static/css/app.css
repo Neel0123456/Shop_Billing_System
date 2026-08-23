@@ -332,9 +332,97 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line-strong)
 .stat.is-ok .value { color: var(--ok); }
 
 /* --------------------------------------------------------- filters block */
-.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .7rem; }
-.filters .field { margin: 0; }
-.filter-actions { display: flex; gap: .5rem; align-items: flex-end; }
+/* A fixed 4-column grid, not auto-fit: auto-fit reflows into ragged rows and
+   orphans the last field on a line of its own. Fields declare their own span,
+   so every row stays full and aligned at every width. */
+.filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .75rem .9rem;
+}
+.filters .field { margin: 0; min-width: 0; }
+.filters .span-2 { grid-column: span 2; }
+
+/* Help text must not stretch its grid row, so it is pinned below the input. */
+.filters .field { position: relative; padding-bottom: 0; }
+.filters .field .form-text { margin-top: .2rem; }
+
+.filter-search .form-control {
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237b8794' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") no-repeat .55rem center;
+  background-size: 15px;
+  padding-left: 2rem;
+}
+
+.filter-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--line);
+  margin: .2rem 0;
+}
+
+.quick-row {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+.quick-row .quick-label {
+  font-size: .74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--ink-faint);
+  margin-right: .15rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .28rem .65rem;
+  font-size: .8rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s;
+}
+.chip:hover { background: var(--brand-light); border-color: var(--brand); color: var(--brand); text-decoration: none; }
+.chip.is-active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px; height: 15px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .09);
+  font-size: .72rem;
+  line-height: 1;
+  color: inherit;
+}
+.chip-remove:hover { background: rgba(0, 0, 0, .2); text-decoration: none; }
+
+.active-filters {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+  padding: .65rem 1.1rem;
+  background: var(--brand-light);
+  border-bottom: 1px solid var(--line);
+}
+.active-filters .quick-label { color: var(--brand); }
+.active-filters .chip { background: #fff; border-color: #b9cde0; }
+
+@media (max-width: 980px) {
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filters .span-2 { grid-column: span 2; }
+}
+@media (max-width: 560px) {
+  .filters { grid-template-columns: 1fr; }
+  .filters .span-2 { grid-column: span 1; }
+}
 
 /* -------------------------------------------------------- line item grid */
 .items-table { width: 100%; border-collapse: collapse; }

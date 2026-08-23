@@ -58,6 +58,7 @@
 
   {# ------------------------------------------------------- letterhead --- #}
   <div class="shop-name">{{ shop_name }}</div>
+  {% if shop_owner %}<div class="shop-line">Proprietor: {{ shop_owner }}</div>{% endif %}
   {% if shop_tagline %}<div class="shop-line"><i>{{ shop_tagline }}</i></div>{% endif %}
   {% if shop_address %}<div class="shop-line">{{ shop_address }}</div>{% endif %}
   <div class="shop-line">

@@ -90,12 +90,30 @@ class Command(BaseCommand):
             )
 
         # Prove it renders with realistic data.
+        #
+        # The sample data is written inside a transaction that is always rolled
+        # back, so running --check against a live shop database leaves no stray
+        # bill or customer behind. The .docx it writes is a real file on disk
+        # (file I/O is outside the transaction), which is the point.
+        from django.db import transaction
+
         from billing.tests.factories import sample_context
 
-        doc.render(sample_context())
         out = target.with_name(f"{target.stem}__check.docx")
-        doc.save(str(out))
+
+        class _Rollback(Exception):
+            pass
+
+        try:
+            with transaction.atomic():
+                doc.render(sample_context())
+                doc.save(str(out))
+                raise _Rollback
+        except _Rollback:
+            pass
+
         self.stdout.write(self.style.SUCCESS(f"Rendered OK -> {out}"))
+        self.stdout.write("The sample bill used for this check was not saved.")
 
     # -- --create ----------------------------------------------------------
     def create_template(self, target: Path, *, force: bool = False):
@@ -194,6 +212,8 @@ class Command(BaseCommand):
 
         # --- letterhead ---------------------------------------------------
         para("{{ shop_name }}", size=20, bold=True, align="center", space_after=0)
+        cond_para("shop_owner", "Proprietor: {{ shop_owner }}",
+                  size=9, align="center", space_after=0)
         cond_para("shop_tagline", "{{ shop_tagline }}",
                   size=9, align="center", italic=True, space_after=0)
         para("{{ shop_address }}", size=9, align="center", space_after=0)

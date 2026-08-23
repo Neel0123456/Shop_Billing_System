@@ -238,6 +238,7 @@ DOCX_TEMPLATE_PATH=D:/Personal_Fav_projects/Web_App/doc_templates/invoice_templa
 python manage.py docx_template --create   # writes a working starter template
 python manage.py docx_template --list     # prints every available placeholder
 python manage.py docx_template --check    # renders it with sample data
+                                          # (the sample bill is never saved)
 ```
 
 Open the generated file in Word, restyle it however you like — fonts, borders,
@@ -247,7 +248,7 @@ logo, column widths, margins — and keep the placeholders intact.
 
 | Group | Placeholders |
 |---|---|
-| Shop | `shop_name` `shop_tagline` `shop_address` `shop_address_line1` `shop_address_line2` `shop_city` `shop_state` `shop_pincode` `shop_phone` `shop_alt_phone` `shop_email` `shop_gstin` `shop_footer_note` `shop_terms` |
+| Shop | `shop_name` `shop_owner` `shop_tagline` `shop_address` `shop_address_line1` `shop_address_line2` `shop_city` `shop_state` `shop_pincode` `shop_phone` `shop_alt_phone` `shop_email` `shop_gstin` `shop_footer_note` `shop_terms` |
 | Bill | `invoice_number` `invoice_date` `invoice_date_long` `created_on` `created_at` `financial_year` |
 | Customer | `customer_name` `customer_phone` `customer_email` `customer_city` `customer_address` |
 | Totals | `subtotal` `total_discount` `grand_total` `grand_total_words` `item_count` `total_qty` |

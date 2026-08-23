@@ -140,6 +140,7 @@ class InvoiceListView(LoginRequiredMixin, ListView):
                     "overpaid": abs(overpaid["amount"] or ZERO),
                 },
                 "querystring": self._querystring_without_page(),
+                "active_filters": self._active_filters(),
                 "today": today,
                 "yesterday": today - timedelta(days=1),
                 "month_start": today.replace(day=1),
@@ -153,6 +154,45 @@ class InvoiceListView(LoginRequiredMixin, ListView):
         params.pop("page", None)
         encoded = params.urlencode()
         return f"&{encoded}" if encoded else ""
+
+    def _active_filters(self) -> list[dict]:
+        """
+        One chip per filter in use, each with a link that drops just that one.
+
+        Makes it obvious why the list is short, instead of leaving the operator
+        hunting through the form for the field they typed in earlier.
+        """
+        if not self.filter_form.is_bound or not self.filter_form.is_valid():
+            return []
+
+        payment_labels = dict(InvoiceFilterForm.PAYMENT_CHOICES)
+        chips = []
+
+        for name, value in self.filter_form.cleaned_data.items():
+            if value in (None, "", []):
+                continue
+
+            if name == "payment":
+                shown = payment_labels.get(value, value)
+            elif hasattr(value, "strftime"):
+                shown = value.strftime("%d %b %Y")
+            else:
+                shown = value
+
+            remaining = self.request.GET.copy()
+            remaining.pop(name, None)
+            remaining.pop("page", None)
+            encoded = remaining.urlencode()
+
+            chips.append(
+                {
+                    "field": name,
+                    "label": self.filter_form.fields[name].label,
+                    "value": shown,
+                    "remove_url": f"?{encoded}" if encoded else self.request.path,
+                }
+            )
+        return chips
 
 
 # ===========================================================================

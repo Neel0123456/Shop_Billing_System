@@ -170,3 +170,43 @@ class SeedDemoCommandTests(TestCase):
         call_command("seed_demo", "--clear", stdout=StringIO())
         call_command("seed_demo", "--bills", "1", stdout=StringIO())
         self.assertTrue(Invoice.objects.get().number.endswith("/0001"))
+
+
+class DocxTemplateCheckIsolationTests(TestCase):
+    """`--check` must never leave sample data in a live shop database."""
+
+    def test_check_leaves_no_rows_behind(self):
+        with TemporaryDirectory() as tmp:
+            target = Path(tmp) / "bill.docx"
+            call_command("docx_template", "--create", "--path", str(target), stdout=StringIO())
+
+            before = (Invoice.objects.count(), Customer.objects.count())
+            out = StringIO()
+            call_command("docx_template", "--check", "--path", str(target), stdout=out)
+            after = (Invoice.objects.count(), Customer.objects.count())
+
+            self.assertEqual(before, after)
+            self.assertEqual(Invoice.objects.count(), 0)
+            self.assertEqual(Customer.objects.count(), 0)
+            self.assertIn("was not saved", out.getvalue())
+
+    def test_check_still_writes_the_rendered_file(self):
+        with TemporaryDirectory() as tmp:
+            target = Path(tmp) / "bill.docx"
+            call_command("docx_template", "--create", "--path", str(target), stdout=StringIO())
+            call_command("docx_template", "--check", "--path", str(target), stdout=StringIO())
+
+            rendered = target.with_name(f"{target.stem}__check.docx")
+            self.assertTrue(rendered.exists())
+
+    def test_the_owner_name_reaches_the_template(self):
+        from billing.services.context import build_invoice_context
+
+        from .factories import make_invoice, make_shop
+
+        make_shop(name="Mahavir Selection", owner_name="Pashv")
+        invoice = make_invoice(items=[{"description": "A", "rate": "100"}])
+        context = build_invoice_context(invoice)
+
+        self.assertEqual(context["shop_name"], "Mahavir Selection")
+        self.assertEqual(context["shop_owner"], "Pashv")

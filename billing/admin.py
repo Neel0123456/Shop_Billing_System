@@ -17,7 +17,7 @@ class ShopProfileAdmin(admin.ModelAdmin):
     """Singleton: the letterhead printed on every bill."""
 
     fieldsets = (
-        ("Identity", {"fields": ("name", "tagline", "logo", "gstin")}),
+        ("Identity", {"fields": ("name", "owner_name", "tagline", "logo", "gstin")}),
         (
             "Address",
             {"fields": ("address_line1", "address_line2", "city", "state", "pincode")},

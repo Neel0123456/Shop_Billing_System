@@ -46,12 +46,30 @@
 <div class="card">
   <div class="card-head">
     <h2>Filters</h2>
-    <span class="hint">Combine any of these; blank fields are ignored.</span>
+    <span class="hint">Combine any of these &mdash; blank fields are ignored.</span>
   </div>
-  <div class="card-body">
-    <form method="get">
+
+  {% if active_filters %}
+    <div class="active-filters">
+      <span class="quick-label">Showing</span>
+      {% for chip in active_filters %}
+        <span class="chip is-active">
+          {{ chip.label }}: {{ chip.value }}
+          <a class="chip-remove" href="{{ chip.remove_url }}" title="Remove this filter">&times;</a>
+        </span>
+      {% endfor %}
+      <span class="spacer"></span>
+      <a href="{% url 'billing:invoice_list' %}" class="chip">Clear all</a>
+    </div>
+  {% endif %}
+
+  {# The form wraps the body AND the footer, so the submit button needs no JS. #}
+  <form method="get">
+    <div class="card-body">
       <div class="filters">
-        <div class="field">
+
+        {# --- who --- #}
+        <div class="field span-2 filter-search">
           <label for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
           {{ filter_form.q }}
         </div>
@@ -63,6 +81,8 @@
           <label for="{{ filter_form.phone.id_for_label }}">{{ filter_form.phone.label }}</label>
           {{ filter_form.phone }}
         </div>
+
+        {# --- contact and payment state --- #}
         <div class="field">
           <label for="{{ filter_form.email.id_for_label }}">{{ filter_form.email.label }}</label>
           {{ filter_form.email }}
@@ -71,10 +91,14 @@
           <label for="{{ filter_form.city.id_for_label }}">{{ filter_form.city.label }}</label>
           {{ filter_form.city }}
         </div>
-        <div class="field">
+        <div class="field span-2">
           <label for="{{ filter_form.payment.id_for_label }}">{{ filter_form.payment.label }}</label>
           {{ filter_form.payment }}
         </div>
+
+        <div class="filter-divider"></div>
+
+        {# --- dates and amounts --- #}
         <div class="field">
           <label for="{{ filter_form.date_from.id_for_label }}">{{ filter_form.date_from.label }}</label>
           {{ filter_form.date_from }}
@@ -84,26 +108,18 @@
           {{ filter_form.date_to }}
         </div>
         <div class="field">
-          <label for="{{ filter_form.min_amount.id_for_label }}">{{ filter_form.min_amount.label }}</label>
-          {{ filter_form.min_amount }}
-        </div>
-        <div class="field">
-          <label for="{{ filter_form.max_amount.id_for_label }}">{{ filter_form.max_amount.label }}</label>
-          {{ filter_form.max_amount }}
-        </div>
-        <div class="field">
-          <label for="{{ filter_form.created_on.id_for_label }}">{{ filter_form.created_on.label }}</label>
+          <label for="{{ filter_form.created_on.id_for_label }}"
+                 title="{{ filter_form.created_on.help_text }}">{{ filter_form.created_on.label }}</label>
           {{ filter_form.created_on }}
-          <div class="form-text">{{ filter_form.created_on.help_text }}</div>
         </div>
-      </div>
-
-      <div class="flex mt-1">
-        <span class="small muted">Quick date:</span>
-        <a class="btn btn-outline btn-sm" href="?date_from={{ today|date:'Y-m-d' }}&amp;date_to={{ today|date:'Y-m-d' }}">Today</a>
-        <a class="btn btn-outline btn-sm" href="?date_from={{ yesterday|date:'Y-m-d' }}&amp;date_to={{ yesterday|date:'Y-m-d' }}">Yesterday</a>
-        <a class="btn btn-outline btn-sm" href="?date_from={{ month_start|date:'Y-m-d' }}&amp;date_to={{ today|date:'Y-m-d' }}">This month</a>
-        <a class="btn btn-outline btn-sm" href="?created_on={{ today|date:'Y-m-d' }}">Created today</a>
+        <div class="field">
+          <span class="field-label">Bill total between</span>
+          <div class="flex" style="gap:.4rem; flex-wrap:nowrap">
+            {{ filter_form.min_amount }}
+            <span class="muted small nowrap">to</span>
+            {{ filter_form.max_amount }}
+          </div>
+        </div>
       </div>
 
       {% if filter_form.errors %}
@@ -114,15 +130,28 @@
         </div>
       {% endif %}
 
-      <div class="flex mt-2">
-        <button type="submit" class="btn btn-primary">Apply filters</button>
-        <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline">Clear</a>
-        <span class="spacer"></span>
-        <a class="btn btn-outline btn-sm" href="?payment=OUTSTANDING">Show money owed</a>
-        <a class="btn btn-outline btn-sm" href="?payment=OVERDUE">Show overdue</a>
+      <div class="divider"></div>
+
+      <div class="quick-row">
+        <span class="quick-label">Quick</span>
+        <a class="chip" href="?date_from={{ today|date:'Y-m-d' }}&amp;date_to={{ today|date:'Y-m-d' }}">Today</a>
+        <a class="chip" href="?date_from={{ yesterday|date:'Y-m-d' }}&amp;date_to={{ yesterday|date:'Y-m-d' }}">Yesterday</a>
+        <a class="chip" href="?date_from={{ month_start|date:'Y-m-d' }}&amp;date_to={{ today|date:'Y-m-d' }}">This month</a>
+        <a class="chip" href="?created_on={{ today|date:'Y-m-d' }}">Created today</a>
+        <a class="chip" href="?payment=OUTSTANDING">Money owed</a>
+        <a class="chip" href="?payment=OVERDUE">Overdue</a>
       </div>
-    </form>
-  </div>
+    </div>
+
+    <div class="card-foot">
+      <button type="submit" class="btn btn-primary">Apply filters</button>
+      <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline">Clear</a>
+      <span class="spacer"></span>
+      <span class="small muted">
+        {% if is_filtered %}{{ summary.count }} bill(s) match{% else %}Showing all bills{% endif %}
+      </span>
+    </div>
+  </form>
 </div>
 
 {# -------------------------------------------------------------- table --- #}
