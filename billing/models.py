@@ -216,7 +216,33 @@ class InvoiceQuerySet(models.QuerySet):
         return self.outstanding().filter(due_date__lt=on_date or timezone.localdate())
 
     def with_related(self):
+        """Everything the detail page needs, in as few queries as possible."""
         return self.select_related("customer", "created_by").prefetch_related("items")
+
+    def for_list(self):
+        """
+        Lean queryset for the bill listing.
+
+        The listing renders only the invoice's own columns, so joining the
+        customer and prefetching every line item is pure waste - and the waste
+        scales with the page size. Deliberately no select_related and no
+        prefetch here: one query per page, whatever the row count.
+        """
+        return self.only(
+            "id",
+            "number",
+            "invoice_date",
+            "customer_name",
+            "customer_phone",
+            "customer_email",
+            "customer_city",
+            "grand_total",
+            "paid_amount",
+            "balance",
+            "payment_status",
+            "due_date",
+            "print_count",
+        )
 
 
 class Invoice(models.Model):
@@ -300,6 +326,9 @@ class Invoice(models.Model):
             models.Index(fields=["customer_city"]),
             models.Index(fields=["payment_status", "due_date"]),
             models.Index(fields=["-created_at"]),
+            # Matches the default ordering, so paging through thousands of
+            # bills is an index scan rather than a sort of the whole table.
+            models.Index(fields=["-invoice_date", "-id"], name="inv_default_order_idx"),
         ]
 
     def __str__(self):

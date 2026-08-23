@@ -65,6 +65,8 @@
 
   {# The form wraps the body AND the footer, so the submit button needs no JS. #}
   <form method="get">
+    {# Applying filters must not silently reset the chosen page size. #}
+    <input type="hidden" name="per_page" value="{{ per_page }}">
     <div class="card-body">
       <div class="filters">
 
@@ -265,23 +267,76 @@
     </table>
   </div>
 
-  {% if is_paginated %}
-    <div class="pagination">
-      {% if page_obj.has_previous %}
-        <a href="?page=1{{ querystring }}">&laquo; First</a>
-        <a href="?page={{ page_obj.previous_page_number }}{{ querystring }}">Previous</a>
-      {% else %}
-        <span class="disabled">&laquo; First</span>
+  {% if page_obj %}
+    <div class="pager">
+      <div class="pager-info">
+        Showing <strong>{{ showing_from }}&ndash;{{ showing_to }}</strong>
+        of <strong>{{ page_obj.paginator.count }}</strong> bill{{ page_obj.paginator.count|pluralize }}
+        {% if page_obj.paginator.num_pages > 1 %}
+          &middot; page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        {% endif %}
+      </div>
+
+      {% if page_links %}
+        <nav class="pager-pages" aria-label="Bill pages">
+          {% if page_obj.has_previous %}
+            <a href="?page=1{{ querystring }}" title="First page">&laquo;</a>
+            <a href="?page={{ page_obj.previous_page_number }}{{ querystring }}"
+               title="Previous page" rel="prev">&lsaquo;</a>
+          {% else %}
+            <span class="disabled">&laquo;</span>
+            <span class="disabled">&lsaquo;</span>
+          {% endif %}
+
+          {% for link in page_links %}
+            {% if link.ellipsis %}
+              <span class="gap">&hellip;</span>
+            {% elif link.is_current %}
+              <span class="current" aria-current="page">{{ link.number }}</span>
+            {% else %}
+              <a href="?page={{ link.number }}{{ querystring }}">{{ link.number }}</a>
+            {% endif %}
+          {% endfor %}
+
+          {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{{ querystring }}"
+               title="Next page" rel="next">&rsaquo;</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{{ querystring }}"
+               title="Last page">&raquo;</a>
+          {% else %}
+            <span class="disabled">&rsaquo;</span>
+            <span class="disabled">&raquo;</span>
+          {% endif %}
+        </nav>
       {% endif %}
 
-      <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      <form method="get" class="pager-controls">
+        {# Carry the active filters, so changing the page size keeps them. #}
+        {% for key, value in request.GET.items %}
+          {% if key != 'per_page' and key != 'page' %}
+            <input type="hidden" name="{{ key }}" value="{{ value }}">
+          {% endif %}
+        {% endfor %}
 
-      {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{{ querystring }}">Next</a>
-        <a href="?page={{ page_obj.paginator.num_pages }}{{ querystring }}">Last &raquo;</a>
-      {% else %}
-        <span class="disabled">Last &raquo;</span>
-      {% endif %}
+        <label for="per-page-select">Per page</label>
+        <select name="per_page" id="per-page-select" class="form-select"
+                onchange="this.form.submit()">
+          {% for choice in per_page_choices %}
+            <option value="{{ choice }}" {% if choice == per_page %}selected{% endif %}>
+              {{ choice }}
+            </option>
+          {% endfor %}
+        </select>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+          <label for="page-jump">Go to</label>
+          <input type="number" name="page" id="page-jump" class="form-control"
+                 min="1" max="{{ page_obj.paginator.num_pages }}"
+                 value="{{ page_obj.number }}"
+                 aria-label="Jump to page number">
+          <button type="submit" class="btn btn-outline btn-sm">Go</button>
+        {% endif %}
+      </form>
     </div>
   {% endif %}
 </div>

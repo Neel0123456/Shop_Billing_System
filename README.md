@@ -375,6 +375,21 @@ From each row you can download the PDF or reprint. The detail page adds an
 editable copy, an HTML preview, the print history, and a **Record payment** box
 that re-derives the payment state as money comes in.
 
+### Paging
+
+**50 bills per page** by default, switchable to 25, 100 or 200 from the
+dropdown in the table footer. Navigation gives numbered page buttons with the
+middle collapsed once there are many pages (`1 … 13 14 [15] 16 17 … 31`), first
+and last always reachable, plus a **Go to** box for jumping straight to a page
+number. The chosen page size and every active filter survive paging.
+
+Cost is flat, not per-row: with 1,500 bills the listing runs **8 queries at any
+page size** and never touches the line-item table (the listing shows only the
+bill's own columns, so there is no join and no prefetch). Measured on
+PostgreSQL 18: ~90 ms for 50 rows, ~236 ms for 200 rows, and page 20 costs the
+same as page 1. A composite index on `(-invoice_date, -id)` matches the default
+ordering, so deep pages stay an index scan instead of sorting the table.
+
 ---
 
 ## Tests

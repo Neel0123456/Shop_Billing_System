@@ -2,7 +2,9 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -823,3 +825,136 @@ class DuplicateSubmissionTests(TestCase):
     def test_the_form_page_is_not_cacheable(self):
         response = self.client.get(self.url)
         self.assertIn("no-store", response["Cache-Control"])
+
+
+@override_settings(**TEST_SETTINGS)
+class PaginationTests(TestCase):
+    """Paging must stay cheap and navigable with thousands of bills."""
+
+    @classmethod
+    def setUpTestData(cls):
+        make_shop()
+        cls.user = make_user()
+        # 120 bills -> 3 pages at the default 50 per page.
+        customer = make_customer(phone="9700000000", name="Pager Customer")
+        bulk = []
+        today = timezone.localdate()
+        for n in range(120):
+            bulk.append(
+                Invoice(
+                    number=f"INV/TEST/{n:04d}",
+                    customer=customer,
+                    customer_name=f"Customer {n:03d}",
+                    customer_phone="9700000000",
+                    customer_city="Himmatnagar",
+                    invoice_date=today - timedelta(days=n % 30),
+                    subtotal=Decimal("100.00"),
+                    grand_total=Decimal("100.00"),
+                    paid_amount=Decimal("100.00"),
+                    payment_status=PaymentStatus.PAID,
+                )
+            )
+        Invoice.objects.bulk_create(bulk)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+        self.url = reverse("billing:invoice_list")
+
+    def test_default_page_size_is_50(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["per_page"], 50)
+        self.assertEqual(len(response.context["invoices"]), 50)
+
+    def test_page_size_can_be_changed(self):
+        for size in (25, 50, 100, 200):
+            with self.subTest(size=size):
+                response = self.client.get(self.url, {"per_page": size})
+                self.assertEqual(response.context["per_page"], size)
+                self.assertEqual(len(response.context["invoices"]), min(size, 120))
+
+    def test_an_unoffered_page_size_falls_back_to_the_default(self):
+        for bogus in ("100000", "-5", "0", "abc", ""):
+            with self.subTest(value=bogus):
+                response = self.client.get(self.url, {"per_page": bogus})
+                self.assertEqual(response.context["per_page"], 50)
+                self.assertLessEqual(len(response.context["invoices"]), 50)
+
+    def test_page_count_follows_the_page_size(self):
+        self.assertEqual(
+            self.client.get(self.url, {"per_page": 25}).context["paginator"].num_pages, 5
+        )
+        self.assertEqual(
+            self.client.get(self.url, {"per_page": 50}).context["paginator"].num_pages, 3
+        )
+        self.assertEqual(
+            self.client.get(self.url, {"per_page": 200}).context["paginator"].num_pages, 1
+        )
+
+    def test_jumping_to_a_page_works(self):
+        response = self.client.get(self.url, {"page": 3})
+        self.assertEqual(response.context["page_obj"].number, 3)
+        self.assertEqual(response.context["showing_from"], 101)
+        self.assertEqual(response.context["showing_to"], 120)
+
+    def test_numbered_links_are_offered_and_mark_the_current_page(self):
+        response = self.client.get(self.url, {"page": 2})
+        links = response.context["page_links"]
+        self.assertTrue(links)
+        current = [link for link in links if link.get("is_current")]
+        self.assertEqual(len(current), 1)
+        self.assertEqual(current[0]["number"], 2)
+
+    def test_long_page_ranges_are_elided(self):
+        response = self.client.get(self.url, {"per_page": 25, "page": 3})
+        links = response.context["page_links"]
+        numbers = [link.get("number") for link in links if "number" in link]
+        self.assertIn(1, numbers)
+        self.assertIn(5, numbers)  # first and last page always reachable
+
+    def test_a_single_page_shows_no_numbered_links(self):
+        response = self.client.get(self.url, {"per_page": 200})
+        self.assertEqual(response.context["page_links"], [])
+
+    def test_an_out_of_range_page_is_a_404_not_a_crash(self):
+        self.assertEqual(self.client.get(self.url, {"page": 9999}).status_code, 404)
+
+    def test_filters_survive_a_page_change(self):
+        response = self.client.get(self.url, {"city": "Himmatnagar", "page": 2})
+        self.assertEqual(response.context["page_obj"].number, 2)
+        self.assertIn("city=Himmatnagar", response.context["querystring"])
+
+    def test_the_page_size_survives_paging(self):
+        response = self.client.get(self.url, {"per_page": 25, "page": 2})
+        self.assertIn("per_page=25", response.context["querystring"])
+
+    def test_totals_cover_every_match_not_just_the_page(self):
+        response = self.client.get(self.url)
+        summary = response.context["summary"]
+        self.assertEqual(summary["count"], 120)
+        self.assertEqual(summary["billed"], Decimal("12000.00"))
+
+    def _query_count(self, **params) -> int:
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(self.url, params)
+        return len(captured.captured_queries)
+
+    def test_a_page_costs_the_same_whatever_the_page_size(self):
+        """
+        The listing must not issue one query per row.
+
+        Asserting the two page sizes cost the *same* is the real property; a
+        hard-coded number would just break whenever an unrelated query moves.
+        """
+        small = self._query_count(per_page=25)
+        large = self._query_count(per_page=200)
+        self.assertEqual(small, large)
+        self.assertLess(small, 15, "the listing should need a handful of queries, not dozens")
+
+    def test_a_deep_page_costs_no_more_than_the_first(self):
+        self.assertEqual(self._query_count(page=1), self._query_count(page=3))
+
+    def test_the_listing_does_not_fetch_line_items(self):
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(self.url, {"per_page": 200})
+        sql = " ".join(q["sql"].lower() for q in captured.captured_queries)
+        self.assertNotIn("invoicelineitem", sql)

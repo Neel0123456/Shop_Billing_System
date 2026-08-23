@@ -45,6 +45,12 @@ ZERO = Decimal("0.00")
 
 DEC = DecimalField(max_digits=14, decimal_places=2)
 
+# Rows per page on the bill listing. The shop can pick from these; anything
+# else in the URL falls back to the default rather than letting a hand-typed
+# ?per_page=100000 pull the whole table into memory.
+PER_PAGE_CHOICES = [25, 50, 100, 200]
+DEFAULT_PER_PAGE = 50
+
 
 def _zero_sum(field):
     """Sum() that returns 0 instead of None on an empty queryset."""
@@ -60,10 +66,20 @@ class InvoiceListView(LoginRequiredMixin, ListView):
     model = Invoice
     template_name = "billing/invoice_list.html"
     context_object_name = "invoices"
-    paginate_by = 25
+    paginate_by = DEFAULT_PER_PAGE
+
+    def get_paginate_by(self, queryset) -> int:
+        """Rows per page, from ?per_page= but only ever a value we offer."""
+        try:
+            requested = int(self.request.GET.get("per_page", ""))
+        except (TypeError, ValueError):
+            return DEFAULT_PER_PAGE
+        return requested if requested in PER_PAGE_CHOICES else DEFAULT_PER_PAGE
 
     def get_queryset(self):
-        qs = Invoice.objects.with_related()
+        # for_list(): no joins, no prefetch - one query per page however many
+        # thousands of bills the shop has accumulated.
+        qs = Invoice.objects.for_list()
         self.filter_form = InvoiceFilterForm(self.request.GET or None)
 
         if not (self.request.GET and self.filter_form.is_valid()):
@@ -141,6 +157,11 @@ class InvoiceListView(LoginRequiredMixin, ListView):
                 },
                 "querystring": self._querystring_without_page(),
                 "active_filters": self._active_filters(),
+                "page_links": self._page_links(ctx.get("page_obj")),
+                "per_page": self.get_paginate_by(None),
+                "per_page_choices": PER_PAGE_CHOICES,
+                "showing_from": self._showing_from(ctx.get("page_obj")),
+                "showing_to": self._showing_to(ctx.get("page_obj")),
                 "today": today,
                 "yesterday": today - timedelta(days=1),
                 "month_start": today.replace(day=1),
@@ -148,6 +169,50 @@ class InvoiceListView(LoginRequiredMixin, ListView):
             }
         )
         return ctx
+
+    @staticmethod
+    def _showing_from(page_obj) -> int:
+        return page_obj.start_index() if page_obj else 0
+
+    @staticmethod
+    def _showing_to(page_obj) -> int:
+        return page_obj.end_index() if page_obj else 0
+
+    @staticmethod
+    def _page_links(page_obj) -> list[dict]:
+        """
+        Numbered jump buttons, with gaps collapsed to an ellipsis.
+
+        With 40 pages of bills, rendering 40 buttons is useless; this shows the
+        first and last page plus a window around the current one, e.g.
+        1 ... 7 8 [9] 10 11 ... 40
+        """
+        if not page_obj:
+            return []
+
+        paginator = page_obj.paginator
+        if paginator.num_pages <= 1:
+            return []
+
+        try:
+            numbers = paginator.get_elided_page_range(
+                page_obj.number, on_each_side=2, on_ends=1
+            )
+        except Exception:  # pragma: no cover - very old Django
+            numbers = paginator.page_range
+
+        links = []
+        for number in numbers:
+            if number == paginator.ELLIPSIS:
+                links.append({"ellipsis": True})
+            else:
+                links.append(
+                    {
+                        "number": number,
+                        "is_current": number == page_obj.number,
+                    }
+                )
+        return links
 
     def _querystring_without_page(self) -> str:
         params = self.request.GET.copy()

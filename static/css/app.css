@@ -559,23 +559,66 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line-strong)
 }
 
 /* ---------------------------------------------------------------- misc  */
-.pagination {
+/* ------------------------------------------------------------ pagination */
+.pager {
   display: flex;
-  gap: .3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: .75rem 1.1rem;
+  border-top: 1px solid var(--line);
+  background: #fafbfc;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.pager-info { font-size: .84rem; color: var(--ink-soft); }
+
+.pager-pages { display: flex; gap: .25rem; align-items: center; flex-wrap: wrap; }
+.pager-pages a,
+.pager-pages span {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 .5rem;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: .9rem;
-  flex-wrap: wrap;
-}
-.pagination a, .pagination span {
-  padding: .35rem .65rem;
+  font-size: .85rem;
+  font-variant-numeric: tabular-nums;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  font-size: .85rem;
   background: #fff;
+  color: var(--ink);
 }
-.pagination .current { background: var(--brand); color: #fff; border-color: var(--brand); }
-.pagination .disabled { color: var(--ink-faint); background: #f4f6f9; }
+.pager-pages a:hover {
+  background: var(--brand-light);
+  border-color: var(--brand);
+  color: var(--brand);
+  text-decoration: none;
+}
+.pager-pages .current {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+.pager-pages .disabled { color: var(--line-strong); background: #f4f6f9; }
+.pager-pages .gap { border: 0; background: none; color: var(--ink-faint); min-width: 18px; }
+
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .82rem;
+  color: var(--ink-soft);
+}
+.pager-controls label { margin: 0; font-size: .78rem; white-space: nowrap; }
+.pager-controls .form-select { width: auto; padding: .3rem 1.6rem .3rem .5rem; font-size: .82rem; }
+.pager-controls .form-control { width: 68px; padding: .3rem .45rem; font-size: .82rem; }
+
+@media (max-width: 760px) {
+  .pager { justify-content: center; text-align: center; }
+  .pager-info, .pager-pages, .pager-controls { justify-content: center; width: 100%; }
+}
 
 .kv { display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; font-size: .89rem; }
 .kv dt { color: var(--ink-soft); font-weight: 600; }
